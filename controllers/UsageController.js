@@ -4,7 +4,7 @@ const MainsUsage = require('../models/mains_usage');
 const BatteryUsage = require('../models/battery_usage');
 const PowerSourceUsage = require('../models/PowerSourceUsage');
 const MeterReading = require('../models/MeterReading'); 
-const { updatePowerSourceUsage } = require('../utils/powerSourceUtils');
+const { updatePowerSourceUsage } = require('../Utils/powerSourceUtils');
 const {Op} = require('sequelize');
 
 exports.getAllUsageData = async (req, res) => {

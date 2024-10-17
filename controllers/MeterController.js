@@ -1,12 +1,18 @@
 const MeterReading = require('../models/MeterReading');
 const PowerSourceUsage = require('../models/PowerSourceUsage');
 const { Op } = require('sequelize');
-const { updatePowerSourceUsage } = require('../utils/powerSourceUtils');
+const { updatePowerSourceUsage } = require('../Utils/powerSourceUtils');
 
 
 exports.createReading = async (req, res) => {
-  const { DevId, phases } = req.body;
+  const { DevId,DevType, phases } = req.body;
+  const avg_current = (phases.phase1.find(p => p.param === 'i').value +
+                       phases.phase2.find(p => p.param === 'i').value +
+                       phases.phase3.find(p => p.param === 'i').value) / 3;
 
+  const avg_voltage = (phases.phase1.find(p => p.param === 'v').value +
+                       phases.phase2.find(p => p.param === 'v').value +
+                       phases.phase3.find(p => p.param === 'v').value) / 3;
   try {
     const lastReading = await MeterReading.findOne({
       where: { device_id: DevId },
@@ -40,8 +46,25 @@ exports.createReading = async (req, res) => {
     // Save the new meter reading
     await MeterReading.create({
       device_id: DevId,
-      timestamp: currentTimestamp,
-      // Additional fields as required
+      device_type: DevType,
+      timestamp: new Date(),
+      phase1_kw: phases.phase1.find(p => p.param === 'kw').value,
+      phase1_current: phases.phase1.find(p => p.param === 'i').value,
+      phase1_voltage: phases.phase1.find(p => p.param === 'v').value,
+      phase1_pf: phases.phase1.find(p => p.param === 'pf').value,
+      phase2_kw: phases.phase2.find(p => p.param === 'kw').value,
+      phase2_current: phases.phase2.find(p => p.param === 'i').value,
+      phase2_voltage: phases.phase2.find(p => p.param === 'v').value,
+      phase2_pf: phases.phase2.find(p => p.param === 'pf').value,
+      phase3_kw: phases.phase3.find(p => p.param === 'kw').value,
+      phase3_current: phases.phase3.find(p => p.param === 'i').value,
+      phase3_voltage: phases.phase3.find(p => p.param === 'v').value,
+      phase3_pf: phases.phase3.find(p => p.param === 'pf').value,
+      others_f: phases.others.find(p => p.param === 'F').value,
+      others_apf: phases.others.find(p => p.param === 'Apf').value,
+      others_tkw: phases.others.find(p => p.param === 'Tkw').value,
+      avg_current,
+      avg_voltage,
     });
 
     res.status(201).json({ message: 'Meter reading created successfully.' });
