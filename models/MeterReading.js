@@ -9,7 +9,7 @@ const MeterReading = sequelize.define('MeterReading', {
   },
   device_type: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
   },
   timestamp: {
     type: DataTypes.DATE,
