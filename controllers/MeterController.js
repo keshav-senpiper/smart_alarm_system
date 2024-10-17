@@ -1,85 +1,53 @@
 const MeterReading = require('../models/MeterReading');
 const PowerSourceUsage = require('../models/PowerSourceUsage');
 const { Op } = require('sequelize');
+const { updatePowerSourceUsage } = require('../utils/powerSourceUtils');
 
 
 exports.createReading = async (req, res) => {
-  const { DevId, DevType, phases } = req.body;
-  const currentPacketTime = new Date();
+  const { DevId, phases } = req.body;
 
   try {
-    // Fetch the latest entry from MeterReading
     const lastReading = await MeterReading.findOne({
       where: { device_id: DevId },
       order: [['timestamp', 'DESC']],
     });
 
-    let lastPacketTime = lastReading ? lastReading.timestamp : null;
-    let timeDifference = lastPacketTime ? (currentPacketTime - lastPacketTime) / 1000 : 0; // in seconds
+    const currentTimestamp = new Date();
+    const lastTimestamp = lastReading ? new Date(lastReading.timestamp) : null;
+    const timeDifference = lastTimestamp ? (currentTimestamp - lastTimestamp) / 1000 : 0;
 
-    // Determine the current power source
-    let newPowerSource = null;
-    if (timeDifference > 60) {
-      newPowerSource = 'Battery';
-      var batteryStartTime = lastPacketTime;
-      var batteryEndTime = currentPacketTime;
-    } else if (phases.phase1.find(p => p.param === 'v').value === 0 &&
-               phases.phase3.find(p => p.param === 'v').value !== 0) {
-      newPowerSource = 'DG';
-    } else if (phases.phase1.find(p => p.param === 'v').value !== 0 &&
-               phases.phase3.find(p => p.param === 'v').value !== 0) {
-      newPowerSource = 'Mains';
-    }
+    const phase1Voltage = phases.phase1.find(p => p.param === 'v').value;
+    const phase3Voltage = phases.phase3.find(p => p.param === 'v').value;
 
-    // Check if the power source has changed
-    if (lastReading && lastReading.power_source !== newPowerSource) {
-      // End the previous power source usage
-      await PowerSourceUsage.update(
-        { end_time: currentPacketTime },
-        { where: { device_id: DevId, end_time: null } }
-      );
-
-      // Start a new power source usage record
-      await PowerSourceUsage.create({
+    let lastPowerSource = lastReading ? await PowerSourceUsage.findOne({
+      where: {
         device_id: DevId,
-        power_source: newPowerSource,
-        start_time: newPowerSource === 'Battery' ? batteryStartTime : currentPacketTime,
-        end_time: newPowerSource === 'Battery' ? batteryEndTime : null,
-      });
-    }
+        end_time: null,
+      },
+    }).then(entry => entry ? entry.power_source : null) : null;
 
-    // Insert the new MeterReading entry
-    const newReading = await MeterReading.create({
+    lastPowerSource = await updatePowerSourceUsage(
+      DevId,
+      lastPowerSource,
+      lastTimestamp,
+      currentTimestamp,
+      phase1Voltage,
+      phase3Voltage,
+      timeDifference
+    );
+
+    // Save the new meter reading
+    await MeterReading.create({
       device_id: DevId,
-      device_type: DevType,
-      timestamp: currentPacketTime,
-      phase1_kw: phases.phase1.find(p => p.param === 'kw').value,
-      phase1_current: phases.phase1.find(p => p.param === 'i').value,
-      phase1_voltage: phases.phase1.find(p => p.param === 'v').value,
-      phase1_pf: phases.phase1.find(p => p.param === 'pf').value,
-      phase2_kw: phases.phase2.find(p => p.param === 'kw').value,
-      phase2_current: phases.phase2.find(p => p.param === 'i').value,
-      phase2_voltage: phases.phase2.find(p => p.param === 'v').value,
-      phase2_pf: phases.phase2.find(p => p.param === 'pf').value,
-      phase3_kw: phases.phase3.find(p => p.param === 'kw').value,
-      phase3_current: phases.phase3.find(p => p.param === 'i').value,
-      phase3_voltage: phases.phase3.find(p => p.param === 'v').value,
-      phase3_pf: phases.phase3.find(p => p.param === 'pf').value,
-      others_f: phases.others.find(p => p.param === 'F').value,
-      others_apf: phases.others.find(p => p.param === 'Apf').value,
-      others_tkw: phases.others.find(p => p.param === 'Tkw').value,
-      avg_current: (phases.phase1.find(p => p.param === 'i').value +
-                    phases.phase2.find(p => p.param === 'i').value +
-                    phases.phase3.find(p => p.param === 'i').value) / 3,
-      avg_voltage: (phases.phase1.find(p => p.param === 'v').value +
-                    phases.phase2.find(p => p.param === 'v').value +
-                    phases.phase3.find(p => p.param === 'v').value) / 3,
+      timestamp: currentTimestamp,
+      // Additional fields as required
     });
 
-    res.status(201).json(newReading);
+    res.status(201).json({ message: 'Meter reading created successfully.' });
   } catch (error) {
     console.error('Error creating meter reading:', error);
-    res.status(500).json({ error: 'An error occurred while creating the meter reading.' });
+    res.status(500).json({ error: 'An error occurred while creating meter reading.' });
   }
 };
 

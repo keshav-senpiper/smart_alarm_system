@@ -4,6 +4,7 @@ const MainsUsage = require('../models/mains_usage');
 const BatteryUsage = require('../models/battery_usage');
 const PowerSourceUsage = require('../models/PowerSourceUsage');
 const MeterReading = require('../models/MeterReading'); 
+const { updatePowerSourceUsage } = require('../utils/powerSourceUtils');
 const {Op} = require('sequelize');
 
 exports.getAllUsageData = async (req, res) => {
@@ -139,6 +140,7 @@ exports.postMainsUsage = async (req, res) => {
 
 // controllers/UsageController.js
 
+
 exports.populatePowerSourceUsage = async (req, res) => {
   const { start_id, end_id } = req.body;
 
@@ -147,100 +149,37 @@ exports.populatePowerSourceUsage = async (req, res) => {
   }
 
   try {
-    // Fetch the meter readings within the specified range
     const meterReadings = await MeterReading.findAll({
       where: {
         id: {
           [Op.between]: [start_id, end_id],
         },
       },
-      order: [['timestamp', 'ASC']], // Order by timestamp to process in chronological order
+      order: [['timestamp', 'ASC']],
     });
 
     if (!meterReadings.length) {
       return res.status(404).json({ error: 'No meter readings found in the specified range.' });
     }
 
-    // Initialize the previous power source and timestamp
     let lastPowerSource = null;
     let lastTimestamp = null;
 
-    // Iterate over the meter readings and determine the power source for each reading
     for (let i = 0; i < meterReadings.length; i++) {
       const currentReading = meterReadings[i];
       const currentTimestamp = new Date(currentReading.timestamp);
-      let newPowerSource = null;
+      const timeDifference = lastTimestamp ? (currentTimestamp - lastTimestamp) / 1000 : 0;
 
-      // Determine time difference between consecutive readings
-      const timeDifference = lastTimestamp ? (currentTimestamp - lastTimestamp) / 1000 : 0; // in seconds
+      lastPowerSource = await updatePowerSourceUsage(
+        currentReading.device_id,
+        lastPowerSource,
+        lastTimestamp,
+        currentTimestamp,
+        currentReading.phase1_voltage,
+        currentReading.phase3_voltage,
+        timeDifference
+      );
 
-      // Determine the power source based on the conditions
-      if (timeDifference > 60) {
-        // Case 1: Battery usage
-        newPowerSource = 'Battery';
-
-        // Close the previous power source before starting the battery record
-        if (lastPowerSource) {
-          await PowerSourceUsage.update(
-            { end_time: lastTimestamp },
-            {
-              where: {
-                device_id: currentReading.device_id,
-                power_source: lastPowerSource,
-                end_time: null, // Only update records with no end_time
-              },
-            }
-          );
-        }
-
-        // Create a new battery record from lastTimestamp to currentTimestamp
-        if (lastTimestamp) {
-          await PowerSourceUsage.create({
-            device_id: currentReading.device_id,
-            power_source: newPowerSource,
-            start_time: lastTimestamp,
-            end_time: currentTimestamp,
-          });
-        }
-      } else if (currentReading.phase1_voltage === 0 && currentReading.phase3_voltage !== 0) {
-        // Case 2: DG usage
-        newPowerSource = 'DG';
-      } else if (currentReading.phase1_voltage !== 0 && currentReading.phase3_voltage !== 0) {
-        // Case 3: Mains usage
-        newPowerSource = 'Mains';
-      }
-
-      // If the power source changes, update the usage table
-      if (newPowerSource && newPowerSource !== lastPowerSource) {
-        // End the previous power source usage record
-        if (lastPowerSource && newPowerSource !== 'Battery') {
-          await PowerSourceUsage.update(
-            { end_time: currentTimestamp },
-            {
-              where: {
-                device_id: currentReading.device_id,
-                power_source: lastPowerSource,
-                end_time: null, // Only update records with no end_time
-              },
-            }
-          );
-        }
-
-        // Start a new power source usage record if not Battery (Battery already recorded above)
-        if (newPowerSource !== 'Battery') {
-          await PowerSourceUsage.create({
-            device_id: currentReading.device_id,
-            power_source: newPowerSource,
-            start_time: currentTimestamp,
-            end_time: null, // The end_time is not known yet
-          });
-        }
-
-        // Update lastPowerSource to the new power source
-        lastPowerSource = newPowerSource;
-      }
-
-      // Update lastTimestamp to the current reading's timestamp
       lastTimestamp = currentTimestamp;
     }
 
