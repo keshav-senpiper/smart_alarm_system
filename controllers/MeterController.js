@@ -1,7 +1,7 @@
 const MeterReading = require('../models/MeterReading');
 const PowerSourceUsage = require('../models/PowerSourceUsage');
 const { Op } = require('sequelize');
-const { updatePowerSourceUsage } = require('../Utils/powerSourceUtils');
+const { updatePowerSourceUsage } = require('../utils/powerSourceUtils');
 
 
 exports.createReading = async (req, res) => {
