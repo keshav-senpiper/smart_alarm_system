@@ -27,6 +27,11 @@ const PowerSourceUsage = sequelize.define('PowerSourceUsage', {
     type: DataTypes.DATE,
     allowNull: true, // Can be null if the usage is ongoing
   },
+  remark:{
+    type: DataTypes.STRING,
+    allowNull:true,
+    defaultValue:"NA"
+  }
 }, {
   tableName: 'PowerSourceUsage',
   timestamps: true, // Adds created_at and updated_at fields
