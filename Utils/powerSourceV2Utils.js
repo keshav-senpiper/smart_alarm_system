@@ -61,16 +61,16 @@ async function updatePowerSourceUsageV2(deviceId, lastPowerSource, lastTimestamp
         console.error('Error creating Battery usage record:', error);
       }
     }
+  } else if (mainRV === 0 && mainYV === 0 && mainBV === 0 && mainRC === 0 && mainYC === 0 && mainBC === 0 &&
+             dgRV === 0 && dgYV === 0 && dgBV === 0 && dgRC === 0 && dgYC === 0 && dgBC === 0) {
+    // Case 2: Battery usage (all main and DG values are zero)
+    newPowerSource = 'Battery';
+    console.log('Detected Battery usage as all mains and DG values are zero.');
   } else if (mainRV === 0 && mainYV === 0 && mainBV === 0 && mainRC === 0 && mainYC === 0 && mainBC === 0) {
-    // If all main values are zero, check DG values
+    // Case 3: DG usage (all main values are zero and at least one DG value is non-zero)
     if (dgRV !== 0 || dgYV !== 0 || dgBV !== 0 || dgRC !== 0 || dgYC !== 0 || dgBC !== 0) {
-      // Case 2: DG usage (all main values are zero and at least one DG value is non-zero)
       newPowerSource = 'DG';
       console.log('Detected DG usage as all mains are zero and at least one DG value is non-zero.');
-    } else {
-      // Case 3: Battery usage (all main and DG values are zero)
-      newPowerSource = 'Battery';
-      console.log('Detected Battery usage as all mains and DG values are zero.');
     }
   } else {
     // Case 4: Mains usage (at least one of the main values is non-zero)
